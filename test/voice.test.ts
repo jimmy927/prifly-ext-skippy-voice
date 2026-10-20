@@ -18,7 +18,7 @@ function track(deps: VoiceDeps): VoiceServer {
 }
 
 /** A stand-in spawn and kill: records every call, no Python runs. */
-function standIn(options: { healthy?: boolean; installed?: boolean; exitsOnTerm?: boolean; graceMs?: number } = {}) {
+function standIn(options: { healthy?: boolean; upAfterSpawn?: boolean; installed?: boolean; exitsOnTerm?: boolean; graceMs?: number } = {}) {
   const spawned: { pid: number; exit(): void }[] = [];
   const signals: [number, string][] = [];
   const deps: VoiceDeps = {
@@ -39,7 +39,8 @@ function standIn(options: { healthy?: boolean; installed?: boolean; exitsOnTerm?
       signals.push([pid, signal]);
       if (signal === "SIGTERM" && options.exitsOnTerm !== false) spawned.find((child) => child.pid === pid)?.exit();
     },
-    healthy: () => Promise.resolve(options.healthy ?? false),
+    // True from the start, or only once something was spawned (the model finished loading).
+    healthy: () => Promise.resolve(options.healthy ?? (options.upAfterSpawn === true && spawned.length > 0)),
     installed: () => options.installed ?? true,
     graceMs: options.graceMs ?? 20,
   };
@@ -66,8 +67,8 @@ function recordingApi() {
 }
 
 /** Activates and registers the stop function for cleanup. */
-async function start(api: ReturnType<typeof recordingApi>["api"], deps: VoiceDeps) {
-  const stop = await activate(api, track(deps));
+async function start(api: ReturnType<typeof recordingApi>["api"], deps: VoiceDeps, probeMs?: number) {
+  const stop = await activate(api, track(deps), probeMs);
   stops.push(stop);
   return stop;
 }
@@ -92,11 +93,44 @@ test("the stop function the host calls (disable, unload, reload) stops the serve
 test("the stop function resolves only once the server is down, SIGKILL included", async () => {
   const { deps, signals } = standIn({ exitsOnTerm: false, graceMs: 20 });
   const stop = await start(recordingApi().api, deps);
-  await stop();
+  let down = false;
+  const stopping = stop().then(() => {
+    down = true;
+  });
+  // Inside the grace: SIGTERM sent, the server still up, the stop still pending.
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  expect(signals).toEqual([[1000, "SIGTERM"]]);
+  expect(down).toBe(false);
+  await stopping;
   expect(signals).toEqual([
     [1000, "SIGTERM"],
     [1000, "SIGKILL"],
   ]);
+});
+
+test("one follow-up probe turns the status to running once the voice is up", async () => {
+  const { deps } = standIn({ upAfterSpawn: true });
+  const { api, statuses } = recordingApi();
+  await start(api, deps, 5);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(statuses).toEqual([voiceStatusText("started"), voiceStatusText("alive")]);
+});
+
+test("the probe reports a failed start when the voice never came up", async () => {
+  const { deps } = standIn();
+  const { api, statuses } = recordingApi();
+  await start(api, deps, 5);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(statuses).toEqual([voiceStatusText("started"), "Skippy voice: failed to start — see the serve log"]);
+});
+
+test("a stop before the probe fires cancels it", async () => {
+  const { deps } = standIn({ upAfterSpawn: true });
+  const { api, statuses } = recordingApi();
+  const stop = await start(api, deps, 20);
+  await stop();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(statuses).toEqual([voiceStatusText("started")]);
 });
 
 test("a reloaded extension's server waits for the old one's stop before spawning", async () => {

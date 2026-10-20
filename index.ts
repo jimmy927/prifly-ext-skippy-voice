@@ -4,7 +4,7 @@
  * the server and read-aloud goes back to the default voice.
  */
 
-import { VoiceServer, voiceHealthy } from "./voice";
+import { VoiceServer } from "./voice";
 
 /** The part of prifly's `ExtensionApi` this uses (`@prifly/extension-api`). */
 type Api = {
@@ -27,25 +27,26 @@ export function voiceStatusText(voice: "alive" | "started" | "missing-env"): str
   }
 }
 
-export async function activate(api: Api, server: VoiceServer = new VoiceServer()): Promise<() => Promise<void>> {
+export async function activate(api: Api, server: VoiceServer = new VoiceServer(), probeMs = 60_000): Promise<() => Promise<void>> {
   let probe: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
   const voice = await server.ensure();
-  // Stopped while the server was being probed: leave the default voice alone.
-  if (!stopped) {
-    // Owner-slot by the platform hook: this extension's deactivate releases it.
-    api.setSpeechBackend?.(voice === "missing-env" ? null : "http://127.0.0.1:8911");
-    api.log("skippy-voice", { voice });
-    api.status?.(voiceStatusText(voice));
-    if (voice === "started") {
-      // One follow-up probe once the model has had its ~40 s to load, so the
-      // status line lands on running/failed — no recurring watcher.
-      probe = setTimeout(() => {
-        void voiceHealthy().then((up) => {
-          api.status?.(up ? voiceStatusText("alive") : "Skippy voice: failed to start — see the serve log");
-        });
-      }, 60_000);
-    }
+  // Owner-slot by the platform hook: this extension's deactivate releases it.
+  api.setSpeechBackend?.(voice === "missing-env" ? null : "http://127.0.0.1:8911");
+  api.log("skippy-voice", { voice });
+  api.status?.(voiceStatusText(voice));
+  if (voice === "started") {
+    // One follow-up probe once the model has had its ~40 s to load, so the
+    // status line lands on running/failed — no recurring watcher.
+    probe = setTimeout(() => {
+      void server.healthy().then((up) => {
+        // The probe can answer after the stop: say nothing then.
+        if (stopped) return;
+        api.status?.(up ? voiceStatusText("alive") : "Skippy voice: failed to start — see the serve log");
+      });
+    }, probeMs);
+    // Like the server handle, not holding the host's event loop open.
+    probe.unref?.();
   }
   // Disable, unload and reload: the host calls this. It does not await the
   // result (`runStop`), so the next activation waits for the stop itself

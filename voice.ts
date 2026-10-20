@@ -8,6 +8,7 @@
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 const HEALTH_URL = "http://127.0.0.1:8911/health";
@@ -25,7 +26,7 @@ const shared = globalThis as { [STOPPING]?: Promise<void> };
 
 /** Config the voice reads as well; the single point of truth for where the private assets live. */
 export function skippyHome(): string {
-  return process.env.SKIPPY_HOME ?? join(process.env.HOME ?? "/home/jimmy", "src/skippy-voice.worktrees/pipeline-scaffold");
+  return process.env.SKIPPY_HOME ?? join(homedir(), "src/skippy-voice.worktrees/pipeline-scaffold");
 }
 
 /** One probe of the voice server, for the status line as much as for ensure. */
@@ -93,6 +94,11 @@ export class VoiceServer {
   private readonly hooks: [NodeJS.Signals | "exit", () => void][] = [];
 
   constructor(private readonly deps: VoiceDeps = realDeps) {}
+
+  /** One health probe through the same deps as `ensure`. */
+  healthy(): Promise<boolean> {
+    return this.deps.healthy();
+  }
 
   /** Make sure a voice is listening. Concurrent calls share one launch. */
   ensure(): Promise<VoiceOutcome> {

@@ -14,9 +14,9 @@ A server that was already running on port 8911 (started by hand, say) is used bu
 
 While enabled, the extension's row in Settings -> Extensions shows the voice server instead of the description:
 
-- `Skippy voice: running` - the server answered its health check.
-- `Skippy voice: starting - the first read-aloud takes ~40 s` - the extension just started the server and the model is loading. It is checked once more a minute later and the line becomes `running`, or `Skippy voice: failed to start - see the serve log`.
-- `Skippy voice: not installed (no model under SKIPPY_HOME) - read-aloud stays default` - see below.
+- `Skippy voice: running` — the server answered its health check.
+- `Skippy voice: starting — the first read-aloud takes ~40 s` — the extension just started the server and the model is loading. It is checked once more a minute later and the line becomes `Skippy voice: running`, or `Skippy voice: failed to start — see the serve log`.
+- `Skippy voice: not installed (no model under SKIPPY_HOME) — read-aloud stays default` — see below.
 
 There is no background watcher, so the line reflects the last probe. Reloading the extension probes again and starts the server again if it died.
 

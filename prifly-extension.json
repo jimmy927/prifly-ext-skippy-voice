@@ -1,0 +1,7 @@
+{
+  "id": "skippy-voice",
+  "name": "Skippy Voice",
+  "description": "Read-aloud in Skippy the Magnificent's voice, rendered on this machine from the private skippy-voice model. While enabled, the voice runs on 127.0.0.1:8911 and every read-aloud uses it; disable it and read-aloud goes back to the default voice.",
+  "version": "0.1.0",
+  "main": "index.ts"
+}

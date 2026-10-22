@@ -1,6 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
 import { activate, voiceStatusText } from "../index";
-import { VoiceServer, type VoiceChild, type VoiceDeps } from "../voice";
+import { VoiceServer, spawnOptions, type VoiceChild, type VoiceDeps } from "../voice";
+
+test("the server process is spawned hidden but in its own process group", () => {
+  const options = spawnOptions("/somewhere");
+  expect(options.windowsHide).toBe(true);
+  expect(options.detached).toBe(true);
+  expect(options.cwd).toBe("/somewhere");
+});
 
 // What a test started is stopped even when it fails midway, so no process
 // hook or pending probe outlives it.

@@ -6,7 +6,7 @@
  * outlive the extension that wanted it.
  */
 
-import { spawn } from "node:child_process";
+import { spawn, type SpawnOptions } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -59,15 +59,21 @@ export type VoiceDeps = {
   graceMs: number;
 };
 
+/** Options for the server process; exported so a test can assert them without running Python. */
+export function spawnOptions(cwd: string): SpawnOptions {
+  return {
+    cwd,
+    env: { ...process.env, PYTHONPATH: "src" },
+    // Its own process group, so one signal reaches Python and anything it forks.
+    detached: true,
+    // The host runs detached with no console on Windows; without this a console program opens a visible window.
+    windowsHide: true,
+    stdio: ["ignore", "ignore", "ignore"],
+  };
+}
+
 export const realDeps: VoiceDeps = {
-  spawn: (command, args, cwd) =>
-    spawn(command, args, {
-      cwd,
-      env: { ...process.env, PYTHONPATH: "src" },
-      // Its own process group, so one signal reaches Python and anything it forks.
-      detached: true,
-      stdio: ["ignore", "ignore", "ignore"],
-    }),
+  spawn: (command, args, cwd) => spawn(command, args, spawnOptions(cwd)),
   killGroup: (pid, signal) => {
     try {
       process.kill(-pid, signal);
